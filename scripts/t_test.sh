@@ -1,0 +1,10 @@
+curl -d '{"type":"timed", "data":[20]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[5]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[5]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[2]}' -H "Content-Type: application/json" -X POST localhost:8090/start
+curl -d '{"type":"timed", "data":[5]}' -H "Content-Type: application/json" -X POST localhost:8090/start
