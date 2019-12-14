@@ -11,3 +11,6 @@ sudo service rabbitmq-server start
 # be sure to create a security group with these ports opened:
 # https://www.rabbitmq.com/install-rpm.html
 # console http://18.206.140.49:15672/
+
+# api server located at 
+# ec2-54-157-177-126.compute-1.amazonaws.com

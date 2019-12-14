@@ -19,9 +19,10 @@ var id uuid.UUID
 var name string
 var status string
 var seed rand.Source
+var config common.Config
 
 func getEndpoint() string {
-	return "http://" + common.Endpoint + common.Port
+	return "http://" + config.Host + config.Port
 }
 
 func monteCarlo(samples int) float64 {
@@ -75,6 +76,8 @@ func main() {
 	if len(os.Args) < 2 {
 		common.FailOnError(errors.New(""), "usage: consumer [name]")
 	}
+
+	config = common.LoadConfig()
 
 	name = os.Args[1]
 	// connect to queue

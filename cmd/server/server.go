@@ -14,7 +14,7 @@ import (
 
 var jobCount int
 var workerCount int
-var jobs map[uuid.UUID]common.WorkerStatus
+var workers map[uuid.UUID]common.WorkerStatus
 var activeJobs map[int]common.TrackJob
 var queuedJobs map[int]common.Job
 
@@ -39,7 +39,7 @@ func register(w http.ResponseWriter, req *http.Request) {
 
 	// create unique id for job
 	id := uuid.New()
-	jobs[id] = common.WorkerStatus{ID: id, Status: common.Idle, LUD: time.Now(), Name: reg.Name}
+	workers[id] = common.WorkerStatus{ID: id, Status: common.Idle, LUD: time.Now(), Name: reg.Name}
 
 	// create response JSON
 	confirm := common.WorkerStatus{ID: id, Status: common.Idle}
@@ -119,7 +119,9 @@ func delegateJob(job common.Job, workers int) {
 			sendToQueue(common.Job{ID: job.ID, Type: job.Type, Data: []int{samples}})
 		}
 
-	case common.TimedJobType, common.MergeSortJobType:
+	case common.MergeSortJobType:
+		sendToQueue(job)
+	case common.TimedJobType:
 		sendToQueue(job)
 	default:
 		common.FailOnError(common.InvalidJobError(), "invalid job type")
@@ -132,7 +134,7 @@ func serverInfo(w http.ResponseWriter, req *http.Request) {
 	log.Printf("[$] %s", req.URL)
 
 	var s []common.WorkerStatus
-	for k, v := range jobs {
+	for k, v := range workers {
 		s = append(s, common.WorkerStatus{ID: k, Status: v.Status, LUD: v.LUD, Name: v.Name})
 	}
 
@@ -156,11 +158,11 @@ func jobPulse(w http.ResponseWriter, req *http.Request) {
 	err := decoder.Decode(&status)
 	common.FailOnError(err, "failed to decode pulse message from client")
 
-	job, ok := jobs[status.ID]
+	job, ok := workers[status.ID]
 	if ok {
 		job.LUD = time.Now()
 		job.Status = status.Status
-		jobs[status.ID] = job
+		workers[status.ID] = job
 		log.Printf("[$] received pulse from %s status: [%s]", status.ID, status.Status)
 	}
 }
@@ -214,7 +216,7 @@ func jobInfo(w http.ResponseWriter, req *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write(res)
 
-		// respond with all jobs processed in session
+		// respond with all workers processed in session
 	} else {
 		var s []common.TrackJob
 		for _, v := range activeJobs {
@@ -233,7 +235,7 @@ func jobInfo(w http.ResponseWriter, req *http.Request) {
 }
 
 func activeWorkers() (active int) {
-	for _, v := range jobs {
+	for _, v := range workers {
 		if v.Status == common.Idle {
 			active++
 		}
@@ -241,14 +243,28 @@ func activeWorkers() (active int) {
 	return
 }
 
-// func
+func verify(tick *time.Ticker) {
+	for {
+		select {
+		case <-tick.C:
+			for k, v := range workers {
+				if time.Now().Sub(v.LUD) > 45*time.Second {
+					log.Printf("[!] detected node %s is unresponsive. removing from active nodes", v.ID)
+					delete(workers, k)
+					workerCount--
+				}
+			}
+		}
+	}
+}
 
 func main() {
-	log.Printf("[*] starting main node %s%s. to exit press ctrl-c", common.Endpoint, common.Port)
+	config := common.LoadConfig()
+	log.Printf("[*] starting main node %s%s. to exit press ctrl-c", config.Host, config.Port)
 	common.Connq()
 	defer common.Closeq()
 
-	jobs = make(map[uuid.UUID]common.WorkerStatus)
+	workers = make(map[uuid.UUID]common.WorkerStatus)
 	activeJobs = make(map[int]common.TrackJob)
 	queuedJobs = make(map[int]common.Job)
 
@@ -260,6 +276,9 @@ func main() {
 	http.HandleFunc("/completed", completeJob)
 	http.HandleFunc("/jobinfo", jobInfo)
 
+	tick := time.NewTicker(common.VerifyRate * time.Second)
+	go verify(tick)
+
 	// start server
-	http.ListenAndServe(common.Port, nil)
+	http.ListenAndServe(config.Port, nil)
 }

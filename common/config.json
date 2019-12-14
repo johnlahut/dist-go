@@ -1,0 +1,5 @@
+{
+    "Port": ":80",
+    "Host": "ec2-54-157-177-126.compute-1.amazonaws.com",
+    "Queue": "amqp://guest:guest@18.206.140.49:5672/"
+}

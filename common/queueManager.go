@@ -7,6 +7,7 @@ import (
 var conn *amqp.Connection
 var ch *amqp.Channel
 var q amqp.Queue
+var config Config
 
 // Closeq closes the queue
 func Closeq() {
@@ -17,7 +18,8 @@ func Closeq() {
 // Connq connects to the queue and channel
 func Connq() {
 	var err error
-	conn, err = amqp.Dial(QueueConn)
+	config = LoadConfig()
+	conn, err = amqp.Dial(config.Queue)
 	FailOnError(err, "failed to connect to queue")
 
 	ch, err = conn.Channel()
@@ -77,5 +79,4 @@ func GetCh() *amqp.Channel {
 }
 
 func main() {
-
 }

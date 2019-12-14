@@ -1,17 +1,14 @@
 package common
 
 import (
+	"encoding/json"
 	"errors"
+	"os"
+	"path"
 	"time"
 
 	"github.com/google/uuid"
 )
-
-const localQueue string = "amqp://guest:guest@localhost:5672/"
-const prodQueue string = "amqp://guest:guest@18.206.140.49:5672/"
-
-// QueueConn is the current queue to connect to
-const QueueConn string = prodQueue
 
 // TimedJobType - json key for timed jobs
 const TimedJobType = "timed"
@@ -21,19 +18,6 @@ const MonteCarloJobType = "monte-carlo"
 
 // MergeSortJobType - json key for merge-sort jobs
 const MergeSortJobType = "merge-sort"
-
-// DevPort for server while in development
-const devPort string = ":8090"
-const prodPort string = ":80"
-
-// Port used for accepting/sending requests to the server
-const Port string = prodPort
-
-const devEndpoint string = "localhost"
-const prodEndpoint string = "localhost"
-
-// Endpoint to listen/send HTTP requests
-const Endpoint string = prodEndpoint
 
 // Idle represents an idle job status
 const Idle string = "idle"
@@ -49,6 +33,15 @@ const Queued string = "queued"
 
 // HeartRate is how often, in seconds, each node will pulse back to the server
 const HeartRate time.Duration = 45
+
+// VerifyRate is how often, in seconds, the server will clean up its active host list
+const VerifyRate time.Duration = 5
+
+// KillThreshold is the limit on how many seconds a node can be unresponsive prior to killing it
+const KillThreshold time.Duration = 46
+
+// ConfigFile holds runtime configurations
+const ConfigFile string = "config.json"
 
 // Job represents an outgoing job to the consumers
 type Job struct {
@@ -99,7 +92,69 @@ type JobStatus struct {
 	Status  string    `json:"status"`
 }
 
+// Config holds runtime configurations loaded from common/config.json
+type Config struct {
+	Port  string `json:"Port"`
+	Host  string `json:"Host"`
+	Queue string `json:"Queue"`
+}
+
 // InvalidJobError is called when json key "type" is not "timed" "monte-carlo" or "merge-sort"
 func InvalidJobError() error {
 	return errors.New("invalid job")
+}
+
+// LoadConfig loads runtime configurations
+func LoadConfig() (config Config) {
+	filepath := path.Join("..", "src", "github.com", "johnlahut", "dist-go", "common", ConfigFile)
+	file, err := os.Open(filepath)
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&config)
+	FailOnError(err, ">> unable to load config file")
+	return
+}
+
+// MergeSort performs a merge sort on the given slice
+func MergeSort(arr []float64) {
+
+	// base case - if we have an slice of length 1
+	if len(arr) > 1 {
+
+		// compute midpoint, and create new slices (need to copy because s slice of a slice uses same memory)
+		mid := len(arr) / 2
+		left := make([]float64, len(arr[:mid]))
+		right := make([]float64, len(arr[mid:]))
+		copy(left, arr[:mid])
+		copy(right, arr[mid:])
+
+		// sort our smaller slices
+		MergeSort(left)
+		MergeSort(right)
+
+		// i, j trace the sub slices
+		// k traces the master slice
+		i, j, k := 0, 0, 0
+
+		// loop through placing lists in order
+		for i < len(left) && j < len(right) {
+			if left[i] < right[j] {
+				arr[k] = left[i]
+				i++
+			} else {
+				arr[k] = right[j]
+				j++
+			}
+			k++
+		}
+
+		// append any left over elements
+		for ; i < len(left); i++ {
+			arr[k] = left[i]
+			k++
+		}
+		for ; j < len(right); j++ {
+			arr[k] = right[j]
+			k++
+		}
+	}
 }
