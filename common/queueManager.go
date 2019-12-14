@@ -17,7 +17,7 @@ func Closeq() {
 // Connq connects to the queue and channel
 func Connq() {
 	var err error
-	conn, err = amqp.Dial(LocalQueue)
+	conn, err = amqp.Dial(QueueConn)
 	FailOnError(err, "failed to connect to queue")
 
 	ch, err = conn.Channel()
