@@ -44,6 +44,9 @@ const Working string = "working"
 // Complete represents a completed job status
 const Complete string = "completed"
 
+// Queued represents a job that has no available workers
+const Queued string = "queued"
+
 // HeartRate is how often, in seconds, each node will pulse back to the server
 const HeartRate time.Duration = 45
 

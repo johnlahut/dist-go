@@ -16,6 +16,7 @@ var jobCount int
 var workerCount int
 var jobs map[uuid.UUID]common.WorkerStatus
 var activeJobs map[int]common.TrackJob
+var queuedJobs map[int]common.Job
 
 func sendToQueue(job common.Job) {
 
@@ -51,6 +52,13 @@ func register(w http.ResponseWriter, req *http.Request) {
 
 	workerCount++
 	log.Printf(">> number of workers: %d", workerCount)
+
+	workers := activeWorkers()
+	if workerCount == 1 && len(queuedJobs) != 0 && workers >= 1 {
+		for _, v := range queuedJobs {
+			delegateJob(v, workers)
+		}
+	}
 }
 
 // function for handling incoming job requests
@@ -68,13 +76,33 @@ func processJob(w http.ResponseWriter, req *http.Request) {
 	job.ID = jobCount
 	jobCount++
 
-	log.Printf("sending %d job to queue", job.ID)
+	// pass off job to handler
+	var res []byte
 	workers := activeWorkers()
+	if workers < 1 {
+		log.Printf(">> no available workers. job %d is queued.", job.ID)
+		queuedJobs[job.ID] = job
+		confirm := common.JobStatus{ID: job.ID, Status: common.Queued}
+		res, _ = json.Marshal(confirm)
+	} else {
+		delegateJob(job, workers)
+		confirm := common.JobStatus{ID: job.ID, Status: common.Working}
+		res, _ = json.Marshal(confirm)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	w.Write(res)
+}
+
+func delegateJob(job common.Job, workers int) {
+
+	log.Printf("sending %d job to queue", job.ID)
+
 	activeJobs[job.ID] = common.TrackJob{
 		ID: job.ID, Workers: workers, Results: []float64{}, Completed: 0,
 		Status: common.Working, Type: common.MonteCarloJobType}
 
-	// pass off job to handler
 	switch job.Type {
 
 	// splitting monte carlo job up
@@ -96,13 +124,6 @@ func processJob(w http.ResponseWriter, req *http.Request) {
 	default:
 		common.FailOnError(common.InvalidJobError(), "invalid job type")
 	}
-
-	confirm := common.JobStatus{ID: job.ID, Status: common.Working}
-	res, err := json.Marshal(confirm)
-
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	w.Write(res)
 }
 
 // return all registered workers
@@ -229,6 +250,7 @@ func main() {
 
 	jobs = make(map[uuid.UUID]common.WorkerStatus)
 	activeJobs = make(map[int]common.TrackJob)
+	queuedJobs = make(map[int]common.Job)
 
 	// endpoint mappings
 	http.HandleFunc("/start", processJob)
