@@ -21,7 +21,7 @@ var status string
 var seed rand.Source
 
 func getEndpoint() string {
-	return "http://" + common.DevEndpoint + common.DevPort
+	return "http://" + common.Endpoint + common.Port
 }
 
 func monteCarlo(samples int) float64 {
@@ -35,7 +35,7 @@ func monteCarlo(samples int) float64 {
 			m++
 		}
 	}
-	time.Sleep(time.Second * 5)
+	// time.Sleep(20 * time.Second)
 	return (float64(m) / float64(samples)) * 4
 }
 
@@ -98,7 +98,7 @@ func main() {
 
 	register()
 
-	heartbeat := time.NewTicker(15 * time.Second)
+	heartbeat := time.NewTicker(common.HeartRate * time.Second)
 	forever := make(chan bool)
 	status = common.Idle
 	seed = rand.NewSource(rand.Int63())
@@ -112,6 +112,7 @@ func main() {
 			err := json.Unmarshal(d.Body, &job)
 			common.FailOnError(err, "failed to unmarshal job")
 			status = common.Working
+			pulse()
 			// check job type
 			switch job.Type {
 			case common.TimedJobType:
@@ -122,7 +123,8 @@ func main() {
 			case common.MonteCarloJobType:
 				log.Printf("received monte-carlo job: %s", d.Body)
 				result := monteCarlo(job.Data[0])
-
+				status = common.Idle
+				pulse()
 				log.Printf("%f", result)
 
 				body, err := json.Marshal(common.CompletedJob{ID: job.ID, Results: []float64{result}})

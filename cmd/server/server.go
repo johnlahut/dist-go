@@ -220,8 +220,10 @@ func activeWorkers() (active int) {
 	return
 }
 
+// func
+
 func main() {
-	log.Printf("[*] starting main node %s%s. to exit press ctrl-c", common.DevEndpoint, common.DevPort)
+	log.Printf("[*] starting main node %s%s. to exit press ctrl-c", common.Endpoint, common.Port)
 	common.Connq()
 	defer common.Closeq()
 
@@ -237,5 +239,5 @@ func main() {
 	http.HandleFunc("/jobinfo", jobInfo)
 
 	// start server
-	http.ListenAndServe(common.DevPort, nil)
+	http.ListenAndServe(common.Port, nil)
 }

@@ -23,10 +23,17 @@ const MonteCarloJobType = "monte-carlo"
 const MergeSortJobType = "merge-sort"
 
 // DevPort for server while in development
-const DevPort string = ":8090"
+const devPort string = ":8090"
+const prodPort string = ":80"
 
-// DevEndpoint for server while in development
-const DevEndpoint string = "localhost"
+// Port used for accepting/sending requests to the server
+const Port string = prodPort
+
+const devEndpoint string = "localhost"
+const prodEndpoint string = "localhost"
+
+// Endpoint to listen/send HTTP requests
+const Endpoint string = prodEndpoint
 
 // Idle represents an idle job status
 const Idle string = "idle"
@@ -36,6 +43,9 @@ const Working string = "working"
 
 // Complete represents a completed job status
 const Complete string = "completed"
+
+// HeartRate is how often, in seconds, each node will pulse back to the server
+const HeartRate time.Duration = 45
 
 // Job represents an outgoing job to the consumers
 type Job struct {
