@@ -56,9 +56,11 @@ func register(w http.ResponseWriter, req *http.Request) {
 	log.Printf(">> number of workers: %d", workerCount)
 
 	workers := activeWorkers()
-	if workerCount == 1 && len(queuedJobs) != 0 && workers >= 1 {
+	// if we get a new worker and there is something in the queue, just give it to them
+	if len(queuedJobs) != 0 && workers >= 1 {
 		for _, v := range queuedJobs {
 			delegateJob(v, workers)
+			break
 		}
 	}
 }
@@ -209,8 +211,9 @@ func jobPulse(w http.ResponseWriter, req *http.Request) {
 func completeJob(w http.ResponseWriter, req *http.Request) {
 	log.Printf("[$] %s", req.URL)
 
-	decoder := json.NewDecoder(req.Body)
 	var completed common.CompletedJob
+
+	decoder := json.NewDecoder(req.Body)
 	err := decoder.Decode(&completed)
 	common.FailOnError(err, "failed to decode completed job from client")
 
@@ -219,17 +222,16 @@ func completeJob(w http.ResponseWriter, req *http.Request) {
 	// job is complete
 	switch job.Type {
 	case common.MonteCarloJobType:
-		// job is complete
-		if job.Completed == job.Workers && ok {
+		job.Results = append(job.Results, completed.Results[0])
+		job.Completed++
+
+		if job.Completed >= job.Workers && ok {
 			var result float64
 			for i := 0; i < job.Workers; i++ {
 				result += job.Results[i]
 			}
 			job.Results = []float64{result / float64(job.Workers)}
 			job.Status = common.Complete
-		} else {
-			job.Results = append(job.Results, completed.Results[0])
-			job.Completed++
 		}
 
 	case common.MergeSortJobType:
@@ -243,12 +245,23 @@ func completeJob(w http.ResponseWriter, req *http.Request) {
 		}
 		job.Completed++
 
-		if job.Completed == job.Workers && ok {
+		if job.Completed >= job.Workers && ok {
 			job.Status = common.Complete
 		}
 	}
 
 	activeJobs[completed.ID] = job
+
+	// if we just completed a job see if we can queue up another
+	if job.Status == common.Complete && len(queuedJobs) > 0 {
+		// getting a single key is stupid in go
+		for k, v := range queuedJobs {
+			workers := activeWorkers()
+			delegateJob(v, workers)
+			delete(queuedJobs, k)
+			break
+		}
+	}
 
 }
 
@@ -305,6 +318,10 @@ func jobInfo(w http.ResponseWriter, req *http.Request) {
 		var s []common.TrackJob
 		for _, v := range activeJobs {
 			s = append(s, v)
+		}
+		for _, v := range queuedJobs {
+			s = append(s, common.TrackJob{ID: v.ID, Workers: 0, Results: []float64{},
+				Completed: 0, Status: common.Queued, Type: v.Type})
 		}
 
 		res, err := json.Marshal(s)
