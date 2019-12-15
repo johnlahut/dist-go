@@ -70,6 +70,17 @@ func pulse() {
 	common.FailOnError(err, "unable to pulse server - response")
 }
 
+func complete(job common.Job, result []float64) {
+	body, err := json.Marshal(common.CompletedJob{ID: job.ID, Results: result})
+	common.FailOnError(err, "unable to complete job - request")
+
+	// don't really care about the response
+	_, err = http.Post(getEndpoint()+"/completed", "application/json", bytes.NewBuffer(body))
+	common.FailOnError(err, "unable to complete job - request")
+
+	log.Printf("computed result %f", result)
+}
+
 // Start will start consuming and processing from the queue
 func main() {
 
@@ -123,23 +134,24 @@ func main() {
 
 				t := time.Duration(job.Data[0])
 				time.Sleep(t * time.Second)
-			case common.MonteCarloJobType:
-				log.Printf("received monte-carlo job: %s", d.Body)
-				result := monteCarlo(job.Data[0])
+
 				status = common.Idle
 				pulse()
-				log.Printf("%f", result)
+				complete(job, []float64{})
+			case common.MonteCarloJobType:
+				log.Printf("received monte-carlo job: %s", d.Body)
+				result := monteCarlo(int(job.Data[0]))
+				status = common.Idle
 
-				body, err := json.Marshal(common.CompletedJob{ID: job.ID, Results: []float64{result}})
-				common.FailOnError(err, "unable to complete job - request")
+				pulse()
+				complete(job, []float64{result})
 
-				// don't really care about the response
-				_, err = http.Post(getEndpoint()+"/completed", "application/json", bytes.NewBuffer(body))
-				common.FailOnError(err, "unable to complete job - request")
-
-				log.Printf("computed result %f", result)
 			case common.MergeSortJobType:
 				log.Printf("received merge-sort job: %s", d.Body)
+				common.MergeSort(job.Data)
+				status = common.Idle
+				pulse()
+				complete(job, job.Data)
 			default:
 				common.FailOnError(common.InvalidJobError(), "invalid job type")
 			}

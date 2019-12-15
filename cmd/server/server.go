@@ -1,7 +1,9 @@
 package main
 
 import (
+	"encoding/csv"
 	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"strconv"
@@ -66,11 +68,36 @@ func processJob(w http.ResponseWriter, req *http.Request) {
 
 	log.Printf("[$] %s", req.URL)
 
-	// decode incoming job request (from user)
-	decoder := json.NewDecoder(req.Body)
 	var job common.Job
-	err := decoder.Decode(&job)
-	common.FailOnError(err, "failed to decode incoming request")
+
+	// if the request is not json, we are going to assume there is a file
+	// and that it is merge sort
+	if req.Header["Content-Type"][0] != "application/json" {
+		file, _, err := req.FormFile("file")
+		defer file.Close()
+		common.FailOnError(err, "failed to parse file")
+
+		reader := csv.NewReader(file)
+		for {
+			line, err := reader.Read()
+			if err == io.EOF {
+				break
+			} else if err != nil {
+				common.FailOnError(err, "failed to parse csv file")
+			}
+
+			for i := 0; i < len(line); i++ {
+				num, _ := strconv.ParseFloat(line[i], 64)
+				job.Data = append(job.Data, num)
+			}
+		}
+		job.Type = common.MergeSortJobType
+	} else {
+		// decode incoming job request (from user)
+		decoder := json.NewDecoder(req.Body)
+		err := decoder.Decode(&job)
+		common.FailOnError(err, "failed to decode incoming request")
+	}
 
 	// add to job counter
 	job.ID = jobCount
@@ -101,14 +128,14 @@ func delegateJob(job common.Job, workers int) {
 
 	activeJobs[job.ID] = common.TrackJob{
 		ID: job.ID, Workers: workers, Results: []float64{}, Completed: 0,
-		Status: common.Working, Type: common.MonteCarloJobType}
+		Status: common.Working, Type: job.Type}
 
 	switch job.Type {
 
 	// splitting monte carlo job up
 	case common.MonteCarloJobType:
-		samples := job.Data[0] / workers
-		carry := job.Data[0] % workers
+		samples := int(job.Data[0]) / workers
+		carry := int(job.Data[0]) % workers
 
 		log.Printf(">> sending ~%d sample(s) to %d workers", samples, workers)
 
@@ -116,11 +143,22 @@ func delegateJob(job common.Job, workers int) {
 			if i == workers-1 {
 				samples += carry
 			}
-			sendToQueue(common.Job{ID: job.ID, Type: job.Type, Data: []int{samples}})
+			sendToQueue(common.Job{ID: job.ID, Type: job.Type, Data: []float64{float64(samples)}})
 		}
 
+	// splitting merge sort job up
 	case common.MergeSortJobType:
-		sendToQueue(job)
+		chunk := len(job.Data) / workers
+
+		log.Printf("number of workers %d, chunk: %d", workers, chunk)
+
+		for i := 0; i < workers; i++ {
+			if i == workers-1 {
+				sendToQueue(common.Job{ID: job.ID, Type: job.Type, Data: job.Data[i*chunk:]})
+			} else {
+				sendToQueue(common.Job{ID: job.ID, Type: job.Type, Data: job.Data[i*chunk : i*chunk+chunk]})
+			}
+		}
 	case common.TimedJobType:
 		sendToQueue(job)
 	default:
@@ -177,26 +215,72 @@ func completeJob(w http.ResponseWriter, req *http.Request) {
 	common.FailOnError(err, "failed to decode completed job from client")
 
 	job, ok := activeJobs[completed.ID]
-	if ok {
-		job.Results = append(job.Results, completed.Results[0])
-		job.Completed++
-	}
 
 	// job is complete
-	if job.Completed == job.Workers {
-		switch job.Type {
-		case common.MonteCarloJobType:
+	switch job.Type {
+	case common.MonteCarloJobType:
+		// job is complete
+		if job.Completed == job.Workers && ok {
 			var result float64
 			for i := 0; i < job.Workers; i++ {
 				result += job.Results[i]
 			}
 			job.Results = []float64{result / float64(job.Workers)}
 			job.Status = common.Complete
+		} else {
+			job.Results = append(job.Results, completed.Results[0])
+			job.Completed++
+		}
+
+	case common.MergeSortJobType:
+
+		// first worker to return us results
+		if len(job.Results) == 0 && ok {
+			job.Results = make([]float64, len(completed.Results))
+			copy(job.Results, completed.Results)
+		} else if ok {
+			job.Results = merge(job.Results, completed.Results)
+		}
+		job.Completed++
+
+		if job.Completed == job.Workers && ok {
+			job.Status = common.Complete
 		}
 	}
 
 	activeJobs[completed.ID] = job
 
+}
+
+func merge(left, right []float64) []float64 {
+	leftLen, rightLen := len(left), len(right)
+	merged := make([]float64, leftLen+rightLen)
+	var i, j, k int
+
+	for i < leftLen && j < rightLen {
+
+		if left[i] <= right[j] {
+			merged[k] = left[i]
+			i++
+		} else {
+			merged[k] = right[j]
+			j++
+		}
+		k++
+	}
+
+	for i < leftLen {
+		merged[k] = left[i]
+		i++
+		k++
+	}
+
+	for j < rightLen {
+		merged[k] = right[j]
+		j++
+		k++
+	}
+	return merged
 }
 
 func jobInfo(w http.ResponseWriter, req *http.Request) {

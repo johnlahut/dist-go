@@ -46,8 +46,8 @@ const ConfigFile string = "config.json"
 // Job represents an outgoing job to the consumers
 type Job struct {
 	ID   int
-	Type string `json:"type"`
-	Data []int  `json:"data"`
+	Type string    `json:"type"`
+	Data []float64 `json:"data"`
 }
 
 // Registration represents an imcoming request to register a worker
