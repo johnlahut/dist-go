@@ -130,7 +130,7 @@ func delegateJob(job common.Job, workers int) {
 
 	activeJobs[job.ID] = common.TrackJob{
 		ID: job.ID, Workers: workers, Results: []float64{}, Completed: 0,
-		Status: common.Working, Type: job.Type}
+		Status: common.Working, Type: job.Type, Start: time.Now()}
 
 	switch job.Type {
 
@@ -250,6 +250,7 @@ func completeJob(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
+	job.Elapsed = time.Now().Sub(job.Start) / time.Microsecond
 	activeJobs[completed.ID] = job
 
 	// if we just completed a job see if we can queue up another

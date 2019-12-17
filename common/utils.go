@@ -71,12 +71,14 @@ type TimedJob struct {
 // TrackJob represents a job that is currently being processed. This is used by the master to keep track of
 // current running jobs
 type TrackJob struct {
-	ID        int       `json:"id"`
-	Workers   int       `json:"numWorkers"`
-	Results   []float64 `json:"results"`
-	Completed int       `json:"completedJobs"`
-	Status    string    `json:"jobStatus"`
-	Type      string    `json:"jobType"`
+	ID        int           `json:"id"`
+	Workers   int           `json:"numWorkers"`
+	Results   []float64     `json:"results"`
+	Completed int           `json:"completedJobs"`
+	Status    string        `json:"jobStatus"`
+	Type      string        `json:"jobType"`
+	Start     time.Time     `json:"startTime"`
+	Elapsed   time.Duration `json:"elapsed"`
 }
 
 // CompletedJob represents a response back from a node to the server

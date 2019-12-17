@@ -78,7 +78,7 @@ func complete(job common.Job, result []float64) {
 	_, err = http.Post(getEndpoint()+"/completed", "application/json", bytes.NewBuffer(body))
 	common.FailOnError(err, "unable to complete job - request")
 
-	log.Printf("computed result %f", result)
+	// log.Printf("computed result %f", result)
 }
 
 // Start will start consuming and processing from the queue
@@ -147,7 +147,7 @@ func main() {
 				complete(job, []float64{result})
 
 			case common.MergeSortJobType:
-				log.Printf("received merge-sort job: %s", d.Body)
+				log.Print("received merge-sort job:")
 				common.MergeSort(job.Data)
 				status = common.Idle
 				pulse()
